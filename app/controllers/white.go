@@ -6,7 +6,6 @@ import (
 	"browser-manage/lang"
 	"encoding/json"
 	"github.com/Luxurioust/excelize"
-	"github.com/go-xorm/xorm"
 	"github.com/kataras/iris"
 	"github.com/kataras/iris/context"
 	"github.com/streadway/amqp"
@@ -89,41 +88,31 @@ func (White) List(w context.Context) {
 	white := new(models.White)
 
 	//分页结算
-	var whiteSession *xorm.Session
-	if search != "" {
-		whiteSession = models.White{}.GetObj().Where("domain =? or hall_name=? or ips like ?", search, search, "%"+search+"%")
-	} else {
-		whiteSession = models.White{}.GetObj().Where("")
+	whiteList := make([]models.White, 0)
+	var whiteSession = models.White{}.GetObj().NewSession()
+	var countSession = models.White{}.GetObj().NewSession()
+	if newStatus > 0 && newStatus < 3 {
+		whiteSession.Where("status =? ", newStatus)
+		white.Status = int32(newStatus)
 	}
 
-	if newStatus > 0 && newStatus < 3 {
-		whiteSession.And("status =? ", newStatus)
-	}
 	if newChannel > 0 && newChannel < 3 {
-		whiteSession.And("channel=?", newChannel)
+		white.Channel = int32(newChannel)
+		whiteSession.Where("channel=?", newChannel)
 	}
-	count, _ := whiteSession.Count(white) //总的数据量
+
+	if search != "" {
+		whiteSession = whiteSession.And("(domain =? or hall_name=? or ips like ?)", search, search, "%"+search+"%")
+		countSession = whiteSession.Clone()
+	}
+
+	count, _ := countSession.Count(white) //总的数据量
 	number, _ := strconv.Atoi(per_page)   //每页显示的数据条数
 	compute := float64(count) / float64(number)
 	countPage := math.Ceil(compute)                //计算总的页数
 	startPosition := (nowPage - 1) * int32(number) //计算开始位置
 
-	whiteList := make([]models.White, 0)
-	var whiteSessionList *xorm.Session
-	if search != "" {
-		whiteSessionList = models.White{}.GetObj().Where("domain =? or hall_name=? or ips like ?", search, search, "%"+search+"%")
-	} else {
-		whiteSessionList = models.White{}.GetObj().Where("")
-	}
-
-	if newStatus > 0 && newStatus < 3 {
-		whiteSessionList.And("status = ?", newStatus)
-	}
-	if newChannel > 0 && newChannel < 3 {
-		whiteSessionList.And("channel = ?", newChannel)
-	}
-	listErr := whiteSessionList.Desc("id").Limit(number, int(startPosition)).Find(&whiteList)
-	//whiteList,err := models.White{}.List(list,white,int32(number),startPosition)
+	listErr := whiteSession.Desc("id").Limit(number, int(startPosition)).Find(&whiteList)
 	if listErr != nil {
 		w.JSON(iris.Map{
 			"code":    400,
@@ -250,7 +239,7 @@ func IpSplit(ipStr string) []string {
 
 //验证是否为IP格式
 func checkIp(ip string) bool {
-	layout, err := regexp.MatchString("(25[0-5]|2[0-4]\\d|[0-1]\\d{2}|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|[0-1]\\d{2}|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|[0-1]\\d{2}|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|[0-1]\\d{2}|[1-9]?\\d)", ip)
+	layout, err := regexp.MatchString(helper.IP, ip)
 	if !layout || err != nil {
 		return false
 	}
@@ -267,14 +256,25 @@ func checkForm(w context.Context) map[string]map[string]string {
 		ips = IpReplace(ips)  //符号转换
 		newIps = IpSplit(ips) //IP字段截取
 	}
+
 	checkError := make(map[string]map[string]string)
 	domainError := make(map[string]string)
 	hallNameError := make(map[string]string)
 	ipsError := make(map[string]string)
 
+	if ips == "" {
+		ipsError["required"] = lang.Lang{}.GetLang(w, "white", "IpError")
+	}
+
 	if domain == "" {
 		domainError["required"] = lang.Lang{}.GetLang(w, "white", "DomainRequired")
 	}
+
+	// 验证域名格式
+	if !helper.CheckDomain(domain) {
+		domainError["required"] = lang.Lang{}.GetLang(w, "white", "DomainFormatError")
+	}
+
 	if len(domain) > 0 {
 		//验证域名是否已经存在
 		id := w.Params().Get("id")
@@ -296,10 +296,11 @@ func checkForm(w context.Context) map[string]map[string]string {
 	if len(newIps) > 0 {
 		for _, item := range newIps {
 			//校验是否为IP格式
-			if ok := checkIp(item); !ok {
-				ipsError["ipError"] = lang.Lang{}.GetLang(w, "white", "IpError")
+			if ok := helper.CheckIp(item); !ok {
+				ipsError["required"] = lang.Lang{}.GetLang(w, "white", "IpError")
+				break
 			}
-			break
+
 		}
 	}
 
@@ -315,6 +316,7 @@ func checkForm(w context.Context) map[string]map[string]string {
 	if len(ipsError) > 0 {
 		checkError["ips"] = ipsError
 	}
+
 	return checkError
 }
 
@@ -626,7 +628,13 @@ func (White) Import(w iris.Context) {
 			whiteMap[item.Domain] = item.Domain
 		}
 	}
+
+	sum_row := 0
 	for k, row := range rows {
+		// 遇到 []string 为空字符串则退出
+		if len(row[0]) == 0 {
+			break
+		}
 		if k != 0 {
 			var errString string
 			for kk, colCell := range row {
@@ -653,7 +661,7 @@ func (White) Import(w iris.Context) {
 						//验证IP格式是否正确
 						ipformat := true
 						for _, v2 := range newips {
-							if oks := checkIp(v2); !oks {
+							if oks := helper.CheckIp(v2); !oks {
 								errString = lang.Lang{}.GetLang(w, "white", "IpError")
 								ipformat = false
 								break
@@ -692,6 +700,7 @@ func (White) Import(w iris.Context) {
 			}
 
 		}
+		sum_row = k
 	}
 	xlsx.Save() //保存excel文件
 
@@ -708,13 +717,13 @@ func (White) Import(w iris.Context) {
 	//uploadLog.FileName = helper.Substr(fileName,10,0)
 	uploadLog.FileName = newFileName
 	uploadLog.SucceedNumber = aff
-	uploadLog.FailureNumber = int64(len(rows)) - aff - 1
+	uploadLog.FailureNumber = int64(sum_row) - aff
 	uploadLog.CreateDate = time.Now().Format("2006-01-02 15:04:05")
 	models.Upload{}.AddOne(uploadLog)
 
 	w.JSON(iris.Map{
 		"code":    0,
-		"message": "成功导入 " + strconv.Itoa(int(aff)) + " 条记录; 失败 " + strconv.Itoa(len(rows)-int(aff)-1) + " 条记录！",
+		"message": "成功导入 " + strconv.Itoa(int(aff)) + " 条记录; 失败 " + strconv.Itoa(sum_row-int(aff)) + " 条记录！",
 		"result":  "",
 	})
 }

@@ -84,9 +84,9 @@ func (Account) List(w context.Context) {
 	list := make([]models.User, 0)
 	var errlist error
 	if search != "" {
-		errlist = models.User{}.GetObj().Where("user_name =? or account = ? ", search, search).Limit(number, int(startPosition)).Find(&list)
+		errlist = models.User{}.GetObj().Where("user_name =? or account = ? ", search, search).Desc(`last_date`).Limit(number, int(startPosition)).Find(&list)
 	} else {
-		errlist = models.User{}.GetObj().Limit(number, int(startPosition)).Find(&list)
+		errlist = models.User{}.GetObj().Desc(`last_date`).Limit(number, int(startPosition)).Find(&list)
 	}
 
 	//数据为空

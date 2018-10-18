@@ -76,9 +76,9 @@ func (Proxy) List(w context.Context) {
 	proxyList := make([]models.Proxy, 0)
 	var errlist error
 	if search != "" {
-		errlist = models.Proxy{}.GetObj().Where("user_name = ? or addr = ? ", search).Limit(number, int(startPosition)).Find(&proxyList)
+		errlist = models.Proxy{}.GetObj().Where("user_name = ? or addr = ? ", search).Desc("last_update_date").Limit(number, int(startPosition)).Find(&proxyList)
 	} else {
-		errlist = models.Proxy{}.GetObj().Limit(number, int(startPosition)).Find(&proxyList)
+		errlist = models.Proxy{}.GetObj().Desc("last_update_date").Limit(number, int(startPosition)).Find(&proxyList)
 	}
 
 	if errlist != nil {
@@ -200,7 +200,13 @@ func checkProxyForm(w context.Context) map[string]map[string]string {
 
 	if port == "" {
 		portError["required"] = lang.Lang{}.GetLang(w, "proxy", "PortRequired")
+	}else {
+		if ok := helper.CheckPort(port); !ok {
+			portError["error"] = lang.Lang{}.GetLang(w, "proxy", "PortInvalid")
+		}
 	}
+
+
 	if user_name == "" {
 		userNameError["required"] = lang.Lang{}.GetLang(w, "proxy", "UserNameRequired")
 	}

@@ -4,7 +4,7 @@ package config
 	数据库配置文件
 */
 
-const env  = "LOCAL" //LOCAL 开发环境 TEST 线上测试环境  ONLINE 正式环境
+const env  = "TEST" //LOCAL 开发环境 TEST 线上测试环境  ONLINE 正式环境
 
 //mysql
 type Mysql struct {
@@ -42,7 +42,7 @@ func GetMysqlConf() Mysql {
 		case "LOCAL":
 			return Mysql{
 				DB_HOST:         "192.168.31.231",
-				DB_DATABASE:     "AppDistribution",
+				DB_DATABASE:     "browser",
 				DB_USERNAME:     "root",
 				DB_PASSWORD:     "123456",
 				DB_PORT:         "3306",

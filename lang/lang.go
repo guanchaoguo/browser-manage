@@ -45,7 +45,7 @@ func (Lang) GetLang(w context.Context,module string,langCode string) string  {
 				"CaptchaRequired" : "密码不能为空",
 				"AccountRequired" : "真实姓名不能为空",
 				"UserNameExist" : "用户名已存在",
-				"UserNameLength" : "用户名为6-50个字符长度的英文字母+数字组合",
+				"UserNameLength" : "用户名为6-50个字符长度的英文字母数字",
 				"PasswordLength" : "密码长度最少为6位",
 			},
 
@@ -63,6 +63,7 @@ func (Lang) GetLang(w context.Context,module string,langCode string) string  {
 				"AddrRRequired" : "地址不能为空",
 				"IpError"			: "IP格式错误",
 				"PortRequired" : "端口号不能为空",
+				"PortInvalid" : "无效端口号",
 				"UserNameRequired" : "用户名不能为空",
 				"PasswordRequired" : "密码不能为空",
 			},

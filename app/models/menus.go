@@ -1,7 +1,7 @@
 package models
 
 type Menus struct {
-	Id         int32  `json:"id" xorm:"pk"`
+	Id         int32  `json:"id" xorm:"autoincr pk id"`
 	ParentId   int32  `json:"parent_id"`
 	TitleCn    string `json:"title_cn"`
 	TitleEn    string `json:"title_en"`
